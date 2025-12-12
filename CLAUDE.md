@@ -28,7 +28,7 @@ Utilities/     → Constants, ScreenshotUtilities
 
 ## Full Documentation
 
-See `../docs/Aoki/DOCUMENTATION.md` for complete details including:
+See `../docs/Aoki/documentation.md` for complete details including:
 - Detailed workflow and features
 - Component descriptions
 - Configuration options
