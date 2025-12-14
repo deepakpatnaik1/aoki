@@ -62,8 +62,9 @@ class OverlayManager {
                 defer: false
             )
 
-            // Use a high level that still allows interaction
-            window.level = .floating
+            // Use popUpMenu level to ensure overlay is above text fields
+            // that would otherwise fight for cursor control
+            window.level = .popUpMenu
             window.isOpaque = false
             window.backgroundColor = .clear
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -90,9 +91,9 @@ class OverlayManager {
             firstWindow.makeFirstResponder(firstWindow.contentView)
         }
 
-        // Force crosshair cursor immediately and setup cursor rects
-        NSCursor.crosshair.set()
-        overlayViews.forEach { $0.updateCursor() }
+        // Start cursor refresh timer to overcome apps like Terminal
+        // that aggressively reset the cursor
+        overlayViews.forEach { $0.startCursorRefreshTimer() }
 
         os_log("Overlay shown, phase: drawing, screens: %{public}d", log: logger, type: .info, overlayWindows.count)
     }
@@ -102,7 +103,8 @@ class OverlayManager {
         os_log("hideOverlay() called", log: logger, type: .info)
         stopCapture()
 
-        // Remove click monitors from all views
+        // Stop cursor refresh timers and remove click monitors
+        overlayViews.forEach { $0.stopCursorRefreshTimer() }
         overlayViews.forEach { $0.removeClickMonitor() }
 
         overlayWindows.forEach { $0.orderOut(nil) }
@@ -154,8 +156,8 @@ class OverlayManager {
         os_log("startCapture() called - rectangle: %{public}@", log: logger, type: .info, String(describing: rectangle))
         phase = .capturing
 
-        // Update cursor rects (crosshair will be removed since phase != .drawing)
-        overlayViews.forEach { $0.updateCursor() }
+        // Stop cursor refresh timer since we're leaving drawing phase
+        overlayViews.forEach { $0.stopCursorRefreshTimer() }
 
         // Allow mouse events to pass through so user can scroll
         overlayWindows.forEach { $0.ignoresMouseEvents = true }
@@ -223,7 +225,8 @@ class OverlayManager {
     private func hideOverlayInternal() {
         os_log("hideOverlayInternal() called", log: logger, type: .info)
 
-        // Remove click monitors from all views
+        // Stop cursor refresh timers and remove click monitors
+        overlayViews.forEach { $0.stopCursorRefreshTimer() }
         overlayViews.forEach { $0.removeClickMonitor() }
 
         overlayWindows.forEach { $0.orderOut(nil) }

@@ -15,6 +15,8 @@ class OverlayView: NSView {
     private let screenFrame: NSRect
     private var clickMonitor: Any?
     private var escapeMonitor: Any?
+    private var cursorTrackingArea: NSTrackingArea?
+    private var cursorRefreshTimer: Timer?
 
     // MARK: - Initialization
 
@@ -25,6 +27,9 @@ class OverlayView: NSView {
 
         // Setup escape key monitor to cancel overlay
         setupEscapeMonitor()
+
+        // Setup tracking area for active cursor management
+        setupCursorTracking()
     }
 
     required init?(coder: NSCoder) {
@@ -38,6 +43,7 @@ class OverlayView: NSView {
         if let monitor = escapeMonitor {
             NSEvent.removeMonitor(monitor)
         }
+        cursorRefreshTimer?.invalidate()
     }
 
     // MARK: - First Responder
@@ -45,6 +51,49 @@ class OverlayView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     // MARK: - Cursor Management
+
+    /// Sets up a tracking area that actively manages cursor updates.
+    /// This is more aggressive than resetCursorRects and wins against text fields.
+    private func setupCursorTracking() {
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.cursorUpdate, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        cursorTrackingArea = trackingArea
+    }
+
+    /// Starts a timer that continuously pushes the crosshair cursor.
+    /// This overcomes apps like Terminal that aggressively reset the cursor.
+    func startCursorRefreshTimer() {
+        stopCursorRefreshTimer()
+        NSCursor.crosshair.push()
+        cursorRefreshTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self = self, let manager = self.manager, manager.phase == .drawing else {
+                self?.stopCursorRefreshTimer()
+                return
+            }
+            NSCursor.crosshair.push()
+        }
+    }
+
+    /// Stops the cursor refresh timer and pops pushed cursors.
+    func stopCursorRefreshTimer() {
+        cursorRefreshTimer?.invalidate()
+        cursorRefreshTimer = nil
+        NSCursor.pop()
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        // Actively set crosshair during drawing phase - this wins against text fields
+        if let manager = manager, manager.phase == .drawing {
+            NSCursor.crosshair.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
 
     override func resetCursorRects() {
         super.resetCursorRects()
@@ -58,6 +107,10 @@ class OverlayView: NSView {
     /// Call this to refresh the cursor when phase changes
     func updateCursor() {
         window?.invalidateCursorRects(for: self)
+        // Also actively set cursor for immediate feedback
+        if let manager = manager, manager.phase == .drawing {
+            NSCursor.crosshair.set()
+        }
     }
 
     // MARK: - Drawing
