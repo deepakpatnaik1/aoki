@@ -83,8 +83,18 @@ class StitchingManager {
     // MARK: - Private Stitching Methods
     
     private func calculateOffset(from currentImage: NSImage, to previousImage: NSImage) -> CGFloat? {
-        guard let currentCG = currentImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let previousCG = previousImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        // Crop both top and bottom of images before comparing.
+        // This excludes sticky headers AND footers from Vision's alignment calculation.
+        let topMargin: CGFloat = 200    // points to crop from visual top
+        let bottomMargin: CGFloat = 100 // points to crop from visual bottom
+
+        guard let croppedCurrent = cropVerticalMargins(of: currentImage, top: topMargin, bottom: bottomMargin),
+              let croppedPrevious = cropVerticalMargins(of: previousImage, top: topMargin, bottom: bottomMargin) else {
+            return nil
+        }
+
+        guard let currentCG = croppedCurrent.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let previousCG = croppedPrevious.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
 
@@ -93,9 +103,37 @@ class StitchingManager {
         }
 
         // Convert the pixel-based offset from Vision to a point-based offset for AppKit drawing.
-        guard currentImage.size.height > 0 else { return nil }
-        let scale = CGFloat(currentCG.height) / currentImage.size.height
+        guard croppedCurrent.size.height > 0 else { return nil }
+        let scale = CGFloat(currentCG.height) / croppedCurrent.size.height
         return verticalOffsetInPixels / (scale > 0 ? scale : 1.0)
+    }
+
+    private func cropVerticalMargins(of image: NSImage, top: CGFloat, bottom: CGFloat) -> NSImage? {
+        let originalSize = image.size
+        let totalCrop = top + bottom
+        guard totalCrop < originalSize.height else { return image }
+
+        let newHeight = originalSize.height - totalCrop
+        let newSize = NSSize(width: originalSize.width, height: newHeight)
+
+        let croppedImage = NSImage(size: newSize)
+        croppedImage.lockFocus()
+
+        // NSImage uses bottom-left origin (y=0 at bottom).
+        // Visual TOP of image = high y values in NSImage coords.
+        // Visual BOTTOM of image = low y values (near 0).
+        //
+        // To remove visual top: skip the highest y values
+        // To remove visual bottom: skip the lowest y values (start at y=bottom)
+        //
+        // Source rect: start at y=bottom, take newHeight pixels
+        let sourceRect = NSRect(x: 0, y: bottom, width: originalSize.width, height: newHeight)
+        let destRect = NSRect(origin: .zero, size: newSize)
+
+        image.draw(in: destRect, from: sourceRect, operation: .copy, fraction: 1.0)
+
+        croppedImage.unlockFocus()
+        return croppedImage
     }
     
     private func findVerticalOffset(from image1: CGImage, to image2: CGImage) -> CGFloat? {
@@ -119,29 +157,47 @@ class StitchingManager {
     }
     
     private func composite(baseImage: NSImage, newImage: NSImage, offset: CGFloat) -> NSImage? {
-        let baseSize = baseImage.size
-        let newSize = newImage.size
-        
-        // The total height is the base height plus the new, non-overlapping area (the scroll amount).
-        let totalHeight = baseSize.height + offset
-        let outputSize = NSSize(width: baseSize.width, height: totalHeight)
-        
-        let outputImage = NSImage(size: outputSize)
-        outputImage.lockFocus()
-        
-        // Using a standard bottom-up coordinate system for drawing.
-        
-        // 1. Draw the base image (the stitched result so far) at the TOP of the canvas.
-        let baseRect = CGRect(x: 0, y: totalHeight - baseSize.height, width: baseSize.width, height: baseSize.height)
-        baseImage.draw(in: baseRect)
-        
-        // 2. Draw the new image at the BOTTOM of the canvas.
-        let newRect = CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height)
-        newImage.draw(in: newRect)
-        
-        outputImage.unlockFocus()
+        // Strategy: Draw new image first, then base on top.
+        // The base covers the overlap region, hiding sticky headers from the new image.
 
-        return outputImage
+        guard let newCG = newImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let baseCG = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let scale = CGFloat(newCG.height) / newImage.size.height
+        let offsetInPixels = Int(offset * scale)
+
+        // Total height = base height + offset (the new non-overlapping content)
+        let totalHeight = baseCG.height + offsetInPixels
+        let width = baseCG.width
+
+        guard let colorSpace = baseCG.colorSpace,
+              let context = CGContext(
+                data: nil,
+                width: width,
+                height: totalHeight,
+                bitsPerComponent: baseCG.bitsPerComponent,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: baseCG.bitmapInfo.rawValue
+              ) else {
+            return nil
+        }
+
+        // CGContext: y=0 at bottom.
+        // 1. Draw new image at the bottom of canvas (y=0)
+        context.draw(newCG, in: CGRect(x: 0, y: 0, width: width, height: newCG.height))
+
+        // 2. Draw base image on top, starting at y=offsetInPixels
+        //    This covers the overlap region (where sticky elements would duplicate)
+        context.draw(baseCG, in: CGRect(x: 0, y: offsetInPixels, width: width, height: baseCG.height))
+
+        guard let outputCG = context.makeImage() else {
+            return nil
+        }
+
+        return NSImage(cgImage: outputCG, size: NSSize(width: baseImage.size.width, height: baseImage.size.height + offset))
     }
 
     private func cropBottomRegion(of image: NSImage, byAmount amount: CGFloat) -> NSImage? {

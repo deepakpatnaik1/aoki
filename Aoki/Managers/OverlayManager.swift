@@ -34,7 +34,13 @@ class OverlayManager {
     private var overlayWindows: [OverlayWindow] = []
     private var overlayViews: [OverlayView] = []
     private var captureTimer: Timer?
+    private var scrollTimer: Timer?
     private let stitchingManager = StitchingManager()
+
+    /// Pixels to scroll per tick (negative = scroll down/content moves up)
+    private let scrollAmount: Int32 = -15
+    /// Interval between scroll events in seconds
+    private let scrollInterval: TimeInterval = 0.016 // ~60fps for smooth scrolling
 
     /// Current quality mode - can be changed via menu
     var qualityMode: QualityMode = .reading
@@ -101,13 +107,34 @@ class OverlayManager {
     /// Hides all overlays and resets state.
     func hideOverlay() {
         os_log("hideOverlay() called", log: logger, type: .info)
-        stopCapture()
+        cleanupAndReset()
+    }
 
-        // Stop cursor refresh timers and remove click monitors
-        overlayViews.forEach { $0.stopCursorRefreshTimer() }
-        overlayViews.forEach { $0.removeClickMonitor() }
+    /// Force reset everything - call this when the app gets into a bad state.
+    func forceReset() {
+        os_log("forceReset() called - forcing complete cleanup", log: logger, type: .info)
+        cleanupAndReset()
+    }
 
-        overlayWindows.forEach { $0.orderOut(nil) }
+    /// Internal cleanup that handles all state reset.
+    private func cleanupAndReset() {
+        // Stop any running timers
+        captureTimer?.invalidate()
+        captureTimer = nil
+        scrollTimer?.invalidate()
+        scrollTimer = nil
+
+        // Clean up all views
+        for view in overlayViews {
+            view.stopCursorRefreshTimer()
+            view.removeClickMonitor()
+        }
+
+        // Close all windows
+        for window in overlayWindows {
+            window.orderOut(nil)
+        }
+
         overlayWindows.removeAll()
         overlayViews.removeAll()
         phase = .idle
@@ -167,7 +194,7 @@ class OverlayManager {
 
         refreshOverlays()
 
-        // Take first screenshot
+        // Take first screenshot, then start auto-scroll and capture timer
         Task {
             if let image = await captureSingleScreenshot(rectangle) {
                 stitchingManager.startStitching(with: image)
@@ -178,14 +205,9 @@ class OverlayManager {
 
             await MainActor.run {
                 setupCaptureTimer()
+                startAutoScroll()
             }
         }
-    }
-
-    /// Stops capturing and saves the stitched image.
-    private func stopCapture() {
-        captureTimer?.invalidate()
-        captureTimer = nil
     }
 
     /// Called when user clicks to stop capture.
@@ -195,6 +217,10 @@ class OverlayManager {
             return
         }
         os_log("userClickedToStop() called - saving image...", log: logger, type: .info)
+
+        // Immediately transition to idle to prevent race conditions
+        // This prevents double-clicks or escape key from interfering
+        phase = .idle
 
         // Stop the timer first
         captureTimer?.invalidate()
@@ -214,26 +240,11 @@ class OverlayManager {
                 os_log("No stitched image returned from StitchingManager!", log: logger, type: .error)
             }
 
-            // Hide overlay on main thread after save completes
+            // Clean up overlay on main thread after save completes
             await MainActor.run {
-                self.hideOverlayInternal()
+                self.cleanupAndReset()
             }
         }
-    }
-
-    /// Internal method to hide overlay without stopping capture (already stopped).
-    private func hideOverlayInternal() {
-        os_log("hideOverlayInternal() called", log: logger, type: .info)
-
-        // Stop cursor refresh timers and remove click monitors
-        overlayViews.forEach { $0.stopCursorRefreshTimer() }
-        overlayViews.forEach { $0.removeClickMonitor() }
-
-        overlayWindows.forEach { $0.orderOut(nil) }
-        overlayWindows.removeAll()
-        overlayViews.removeAll()
-        phase = .idle
-        rectangle = .zero
     }
 
     private func setupCaptureTimer() {
@@ -246,6 +257,41 @@ class OverlayManager {
                 }
             }
         }
+    }
+
+    // MARK: - Auto Scroll
+
+    private func startAutoScroll() {
+        os_log("startAutoScroll() called", log: logger, type: .info)
+
+        // Calculate scroll position (center of capture rectangle)
+        let scrollX = rectangle.midX
+        let scrollY = rectangle.midY
+
+        scrollTimer = Timer.scheduledTimer(withTimeInterval: scrollInterval, repeats: true) { [weak self] _ in
+            guard let self = self, self.phase == .capturing else { return }
+            self.sendScrollEvent(at: NSPoint(x: scrollX, y: scrollY))
+        }
+    }
+
+    private func sendScrollEvent(at point: NSPoint) {
+        // Convert to screen coordinates for CGEvent (y=0 at top-left)
+        guard let screen = NSScreen.main else { return }
+        let screenHeight = screen.frame.height
+        let cgPoint = CGPoint(x: point.x, y: screenHeight - point.y)
+
+        // Create scroll wheel event
+        guard let scrollEvent = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .pixel,
+            wheelCount: 1,
+            wheel1: scrollAmount,
+            wheel2: 0,
+            wheel3: 0
+        ) else { return }
+
+        scrollEvent.location = cgPoint
+        scrollEvent.post(tap: .cghidEventTap)
     }
 
     // MARK: - Overlay Refresh

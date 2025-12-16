@@ -59,6 +59,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         captureItem.target = self
         menu.addItem(captureItem)
 
+        let restartItem = NSMenuItem(title: "Restart", action: #selector(restartCapture), keyEquivalent: "r")
+        restartItem.target = self
+        menu.addItem(restartItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // Quality mode toggle
@@ -124,6 +128,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
     @objc private func activateCapture() {
         os_log("activateCapture() called - showing overlay", log: logger, type: .info)
         overlayManager.showOverlay()
+    }
+
+    @objc private func restartCapture() {
+        os_log("restartCapture() called - relaunching app", log: logger, type: .info)
+
+        // Spawn a shell process that waits briefly then reopens the app
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.3; open \"\(Bundle.main.bundlePath)\""]
+        try? task.run()
+
+        // Quit the app - the shell process survives and relaunches us
+        NSApplication.shared.terminate(nil)
     }
 
     @objc private func openSaveFolder() {
