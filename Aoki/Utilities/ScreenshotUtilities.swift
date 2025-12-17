@@ -4,8 +4,67 @@
 //
 
 import ScreenCaptureKit
+import AppKit
 
 // MARK: - Public API
+
+/// Captures a screenshot of the frontmost window and copies it to clipboard + sends to Yoink.
+/// Returns true if successful.
+@discardableResult
+func captureActiveWindow() async -> Bool {
+    // Use CGWindowListCreateImage for reliable single-window capture
+    let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+
+    let currentPID = NSRunningApplication.current.processIdentifier
+
+    // Find the frontmost window (excluding Aoki itself)
+    guard let windowInfo = windowList.first(where: { info in
+        guard let ownerPID = info[kCGWindowOwnerPID as String] as? Int32,
+              let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+              let width = bounds["Width"],
+              let height = bounds["Height"],
+              let layer = info[kCGWindowLayer as String] as? Int else {
+            return false
+        }
+        return ownerPID != currentPID &&
+               layer == 0 && // Normal window layer
+               width > 50 && height > 50
+    }),
+    let windowID = windowInfo[kCGWindowNumber as String] as? CGWindowID,
+    let bounds = windowInfo[kCGWindowBounds as String] as? [String: CGFloat],
+    let x = bounds["X"], let y = bounds["Y"],
+    let width = bounds["Width"], let height = bounds["Height"] else {
+        print("No suitable window found for capture")
+        return false
+    }
+
+    let windowRect = CGRect(x: x, y: y, width: width, height: height)
+    let windowName = windowInfo[kCGWindowOwnerName as String] as? String ?? "Unknown"
+
+    // Capture the specific window
+    guard let cgImage = CGWindowListCreateImage(
+        windowRect,
+        .optionIncludingWindow,
+        windowID,
+        [.boundsIgnoreFraming, .bestResolution]
+    ) else {
+        print("Failed to capture window image")
+        return false
+    }
+
+    let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
+
+    // Copy to clipboard
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.writeObjects([nsImage])
+
+    // Save to file and send to Yoink
+    saveImage(nsImage, mode: .reading)
+
+    print("Window screenshot captured: \(windowName) (\(Int(width))x\(Int(height)))")
+    return true
+}
 
 /// Captures a single screenshot of the specified rectangle on the active screen.
 /// Uses native Retina resolution for crisp text, saved as JPEG for small file sizes.

@@ -2,8 +2,9 @@
 //  AppDelegate.swift
 //  Aoki
 //
-//  Menu bar app that listens for global hotkeys (F17 / Ctrl+1)
-//  to activate scrolling screenshot capture.
+//  Menu bar app that listens for global hotkeys:
+//  - Ctrl+1: Capture active window screenshot
+//  - Ctrl+2: Activate scrolling screenshot capture
 //
 
 import SwiftUI
@@ -55,9 +56,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
 
         let menu = NSMenu()
 
-        let captureItem = NSMenuItem(title: "Capture (F17)", action: #selector(activateCapture), keyEquivalent: "")
-        captureItem.target = self
-        menu.addItem(captureItem)
+        let windowCaptureItem = NSMenuItem(title: "Window Screenshot (⌃1)", action: #selector(captureWindow), keyEquivalent: "")
+        windowCaptureItem.target = self
+        menu.addItem(windowCaptureItem)
+
+        let scrollingCaptureItem = NSMenuItem(title: "Scrolling Capture (⌃2)", action: #selector(activateCapture), keyEquivalent: "")
+        scrollingCaptureItem.target = self
+        menu.addItem(scrollingCaptureItem)
 
         let restartItem = NSMenuItem(title: "Restart", action: #selector(restartCapture), keyEquivalent: "r")
         restartItem.target = self
@@ -119,10 +124,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         hotkeyManager?.startListening()
     }
 
-    /// Called when F17 or Ctrl+1 is pressed
-    func hotkeyPressed() {
-        os_log("hotkeyPressed() called", log: logger, type: .info)
+    /// Called when Ctrl+1 is pressed - capture active window
+    func windowScreenshotHotkeyPressed() {
+        os_log("windowScreenshotHotkeyPressed() called", log: logger, type: .info)
+        captureWindow()
+    }
+
+    /// Called when Ctrl+2 is pressed - scrolling screenshot
+    func scrollingScreenshotHotkeyPressed() {
+        os_log("scrollingScreenshotHotkeyPressed() called", log: logger, type: .info)
         activateCapture()
+    }
+
+    @objc private func captureWindow() {
+        os_log("captureWindow() called - capturing active window", log: logger, type: .info)
+        Task {
+            await captureActiveWindow()
+        }
     }
 
     @objc private func activateCapture() {

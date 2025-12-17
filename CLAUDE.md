@@ -1,11 +1,11 @@
 # Aoki
 
-Scrolling screenshot menu bar app for macOS. Press **F17** to activate.
+Screenshot menu bar app for macOS with two capture modes.
 
 ## Quick Reference
 
-- **Trigger**: F17 key (global hotkey)
-- **Workflow**: F17 → draw rectangle → scroll → click to stop
+- **Ctrl+1**: Window screenshot (captures active window → clipboard + Yoink)
+- **Ctrl+2**: Scrolling screenshot (draw rectangle → scroll → click to stop)
 - **Output**: `/Users/d.patnaik/code/aoki-stills/`
 - **Quality toggle**: Reading Mode (JPEG) / Design Mode (PNG) via menu bar
 

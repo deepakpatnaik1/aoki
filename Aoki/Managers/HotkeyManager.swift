@@ -2,7 +2,9 @@
 //  HotkeyManager.swift
 //  Aoki
 //
-//  Manages global hotkeys (F17 and Ctrl+1) to activate the app.
+//  Manages global hotkeys:
+//  - Ctrl+1: Capture active window screenshot
+//  - Ctrl+2: Activate scrolling screenshot capture
 //
 
 import Cocoa
@@ -65,7 +67,7 @@ class HotkeyManager {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
 
-        os_log("Hotkey listener STARTED successfully. Press F17 or Ctrl+1 to activate.", log: logger, type: .info)
+        os_log("Hotkey listener STARTED successfully. Ctrl+1 for window, Ctrl+2 for scrolling capture.", log: logger, type: .info)
     }
 
     /// Stops listening for global hotkeys.
@@ -83,12 +85,25 @@ class HotkeyManager {
     /// Handles a key event and returns true if it was a hotkey we consumed.
     private func handleKeyEvent(_ event: CGEvent) -> Bool {
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let flags = event.flags
 
-        // F17 key (keycode 64)
-        if keyCode == Constants.Hotkey.f17KeyCode {
-            os_log("F17 detected! Triggering capture...", log: logger, type: .info)
+        // Check if Control key is held
+        let controlHeld = flags.contains(.maskControl)
+
+        // Ctrl+1: Window screenshot
+        if controlHeld && keyCode == Constants.Hotkey.oneKeyCode {
+            os_log("Ctrl+1 detected! Capturing active window...", log: logger, type: .info)
             DispatchQueue.main.async { [weak self] in
-                self?.delegate?.hotkeyPressed()
+                self?.delegate?.windowScreenshotHotkeyPressed()
+            }
+            return true
+        }
+
+        // Ctrl+2: Scrolling screenshot
+        if controlHeld && keyCode == Constants.Hotkey.twoKeyCode {
+            os_log("Ctrl+2 detected! Starting scrolling capture...", log: logger, type: .info)
+            DispatchQueue.main.async { [weak self] in
+                self?.delegate?.scrollingScreenshotHotkeyPressed()
             }
             return true
         }
@@ -109,5 +124,8 @@ class HotkeyManager {
 
 /// Protocol for hotkey events.
 protocol HotkeyManagerDelegate: AnyObject {
-    func hotkeyPressed()
+    /// Called when Ctrl+1 is pressed (capture active window)
+    func windowScreenshotHotkeyPressed()
+    /// Called when Ctrl+2 is pressed (scrolling screenshot)
+    func scrollingScreenshotHotkeyPressed()
 }

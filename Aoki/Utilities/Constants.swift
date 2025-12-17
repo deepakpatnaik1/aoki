@@ -25,8 +25,10 @@ struct Constants {
     }
 
     struct Hotkey {
-        /// F17 key code
-        static let f17KeyCode: Int64 = 64
+        /// "1" key code (for Ctrl+1)
+        static let oneKeyCode: Int64 = 18
+        /// "2" key code (for Ctrl+2)
+        static let twoKeyCode: Int64 = 19
     }
 
     struct Quality {
