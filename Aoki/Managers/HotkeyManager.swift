@@ -5,6 +5,7 @@
 //  Manages global hotkeys:
 //  - Ctrl+1: Capture active window screenshot
 //  - Ctrl+2: Activate scrolling screenshot capture
+//  - Ctrl+3: Capture selected region screenshot
 //
 
 import Cocoa
@@ -67,7 +68,7 @@ class HotkeyManager {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
 
-        os_log("Hotkey listener STARTED successfully. Ctrl+1 for window, Ctrl+2 for scrolling capture.", log: logger, type: .info)
+        os_log("Hotkey listener STARTED successfully. Ctrl+1 for window, Ctrl+2 for scrolling, Ctrl+3 for region.", log: logger, type: .info)
     }
 
     /// Stops listening for global hotkeys.
@@ -108,6 +109,15 @@ class HotkeyManager {
             return true
         }
 
+        // Ctrl+3: Region screenshot
+        if controlHeld && keyCode == Constants.Hotkey.threeKeyCode {
+            os_log("Ctrl+3 detected! Starting region capture...", log: logger, type: .info)
+            DispatchQueue.main.async { [weak self] in
+                self?.delegate?.regionScreenshotHotkeyPressed()
+            }
+            return true
+        }
+
         return false
     }
 
@@ -128,4 +138,6 @@ protocol HotkeyManagerDelegate: AnyObject {
     func windowScreenshotHotkeyPressed()
     /// Called when Ctrl+2 is pressed (scrolling screenshot)
     func scrollingScreenshotHotkeyPressed()
+    /// Called when Ctrl+3 is pressed (region screenshot)
+    func regionScreenshotHotkeyPressed()
 }

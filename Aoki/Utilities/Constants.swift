@@ -29,6 +29,8 @@ struct Constants {
         static let oneKeyCode: Int64 = 18
         /// "2" key code (for Ctrl+2)
         static let twoKeyCode: Int64 = 19
+        /// "3" key code (for Ctrl+3)
+        static let threeKeyCode: Int64 = 20
     }
 
     struct Quality {

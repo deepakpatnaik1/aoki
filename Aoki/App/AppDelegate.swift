@@ -5,6 +5,7 @@
 //  Menu bar app that listens for global hotkeys:
 //  - Ctrl+1: Capture active window screenshot
 //  - Ctrl+2: Activate scrolling screenshot capture
+//  - Ctrl+3: Capture selected region screenshot
 //
 
 import SwiftUI
@@ -63,6 +64,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         let scrollingCaptureItem = NSMenuItem(title: "Scrolling Capture (⌃2)", action: #selector(activateCapture), keyEquivalent: "")
         scrollingCaptureItem.target = self
         menu.addItem(scrollingCaptureItem)
+
+        let regionCaptureItem = NSMenuItem(title: "Region Screenshot (⌃3)", action: #selector(captureRegion), keyEquivalent: "")
+        regionCaptureItem.target = self
+        menu.addItem(regionCaptureItem)
 
         let restartItem = NSMenuItem(title: "Restart", action: #selector(restartCapture), keyEquivalent: "r")
         restartItem.target = self
@@ -136,6 +141,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         activateCapture()
     }
 
+    /// Called when Ctrl+3 is pressed - region screenshot
+    func regionScreenshotHotkeyPressed() {
+        os_log("regionScreenshotHotkeyPressed() called", log: logger, type: .info)
+        captureRegion()
+    }
+
     @objc private func captureWindow() {
         os_log("captureWindow() called - capturing active window", log: logger, type: .info)
         Task {
@@ -146,6 +157,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
     @objc private func activateCapture() {
         os_log("activateCapture() called - showing overlay", log: logger, type: .info)
         overlayManager.showOverlay()
+    }
+
+    @objc private func captureRegion() {
+        os_log("captureRegion() called - showing overlay for region capture", log: logger, type: .info)
+        overlayManager.showOverlay(mode: .region)
     }
 
     @objc private func restartCapture() {

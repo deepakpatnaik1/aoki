@@ -24,6 +24,12 @@ enum CapturePhase {
     case capturing      // Actively capturing frames while user scrolls
 }
 
+/// Mode of capture (what happens after drawing)
+enum CaptureMode {
+    case scrolling      // Auto-scroll and stitch multiple frames (Ctrl+2)
+    case region         // Single capture of drawn region (Ctrl+3)
+}
+
 class OverlayManager {
 
     // MARK: - Properties
@@ -45,10 +51,15 @@ class OverlayManager {
     /// Current quality mode - can be changed via menu
     var qualityMode: QualityMode = .reading
 
+    /// Current capture mode - set before showing overlay
+    private var captureMode: CaptureMode = .scrolling
+
     // MARK: - Public API
 
     /// Shows the overlay on all screens, ready for the user to draw a rectangle.
-    func showOverlay() {
+    /// - Parameter mode: The capture mode (.scrolling or .region). Defaults to .scrolling.
+    func showOverlay(mode: CaptureMode = .scrolling) {
+        captureMode = mode
         guard phase == .idle else {
             os_log("showOverlay() called but phase is not idle: %{public}@", log: logger, type: .error, String(describing: phase))
             return
@@ -173,7 +184,40 @@ class OverlayManager {
             return
         }
 
-        startCapture()
+        switch captureMode {
+        case .scrolling:
+            startCapture()
+        case .region:
+            captureRegion()
+        }
+    }
+
+    /// Captures the drawn region once and saves it (no scrolling).
+    private func captureRegion() {
+        os_log("captureRegion() called - rectangle: %{public}@", log: logger, type: .info, String(describing: rectangle))
+
+        // Stop cursor refresh timer since we're done drawing
+        overlayViews.forEach { $0.stopCursorRefreshTimer() }
+
+        let mode = self.qualityMode
+        let rect = self.rectangle
+
+        Task {
+            if let image = await captureSingleScreenshot(rect) {
+                os_log("Region screenshot captured: %{public}@", log: logger, type: .info, String(describing: image.size))
+                if let savedURL = saveImage(image, mode: mode) {
+                    os_log("Image saved to: %{public}@", log: logger, type: .info, savedURL.path)
+                } else {
+                    os_log("FAILED to save image!", log: logger, type: .error)
+                }
+            } else {
+                os_log("FAILED to capture region screenshot!", log: logger, type: .error)
+            }
+
+            await MainActor.run {
+                self.cleanupAndReset()
+            }
+        }
     }
 
     // MARK: - Capture Phase

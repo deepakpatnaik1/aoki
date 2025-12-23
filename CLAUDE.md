@@ -1,11 +1,12 @@
 # Aoki
 
-Screenshot menu bar app for macOS with two capture modes.
+Screenshot menu bar app for macOS with three capture modes.
 
 ## Quick Reference
 
 - **Ctrl+1**: Window screenshot (captures active window → clipboard + Yoink)
 - **Ctrl+2**: Scrolling screenshot (draw rectangle → scroll → click to stop)
+- **Ctrl+3**: Region screenshot (draw rectangle → captures once)
 - **Output**: `/Users/d.patnaik/code/aoki-stills/`
 - **Quality toggle**: Reading Mode (JPEG) / Design Mode (PNG) via menu bar
 
