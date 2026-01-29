@@ -273,10 +273,27 @@ private func findCurrentSCApplication() async -> SCRunningApplication? {
 }
 
 private func getFileName(extension ext: String) -> String {
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = Constants.dateFormat
-    let timestamp = dateFormatter.string(from: Date())
-    return "Screenshot \(timestamp).\(ext)"
+    // Find the next available number by scanning existing files
+    let saveDirectory = URL(fileURLWithPath: Constants.saveDirectory)
+    let fileManager = FileManager.default
+
+    var maxNumber = 0
+    if let files = try? fileManager.contentsOfDirectory(atPath: saveDirectory.path) {
+        for file in files {
+            // Match "Image N.jpg" or "Image N.png"
+            if file.hasPrefix("Image ") {
+                let numberPart = file
+                    .replacingOccurrences(of: "Image ", with: "")
+                    .replacingOccurrences(of: ".jpg", with: "")
+                    .replacingOccurrences(of: ".png", with: "")
+                if let number = Int(numberPart) {
+                    maxNumber = max(maxNumber, number)
+                }
+            }
+        }
+    }
+
+    return "Image \(maxNumber + 1).\(ext)"
 }
 
 // MARK: - Permission Check
