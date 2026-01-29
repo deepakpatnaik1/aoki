@@ -206,7 +206,7 @@ func injectPathIntoTerminal(_ fileURL: URL) {
             end tell
             delay 0.3
             tell process targetTerminal
-                keystroke "\(fileURL.path)"
+                keystroke " \(fileURL.path)"
             end tell
         end if
     end tell
