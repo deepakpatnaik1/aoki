@@ -7,7 +7,7 @@ import SwiftUI
 
 struct Constants {
     /// Save directory for all screenshots
-    static let saveDirectory = "/Users/d.patnaik/code/aoki-stills"
+    static let saveDirectory = "/Users/d.patnaik/images"
 
     /// Date format for screenshot filenames
     static let dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
