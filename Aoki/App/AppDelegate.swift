@@ -94,6 +94,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        // Terminal injection toggle
+        let terminalInjectionItem = NSMenuItem(title: "Auto-paste to Terminal", action: #selector(toggleTerminalInjection(_:)), keyEquivalent: "")
+        terminalInjectionItem.target = self
+        terminalInjectionItem.state = terminalInjectionEnabled ? .on : .off
+        menu.addItem(terminalInjectionItem)
+
         // Launch at Login toggle
         let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
         launchAtLoginItem.target = self
@@ -120,6 +126,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         } catch {
             print("Failed to toggle launch at login: \(error)")
         }
+    }
+
+    // MARK: - Terminal Injection
+
+    @objc private func toggleTerminalInjection(_ sender: NSMenuItem) {
+        terminalInjectionEnabled.toggle()
+        sender.state = terminalInjectionEnabled ? .on : .off
+        os_log("Terminal injection: %{public}@", log: logger, type: .info, terminalInjectionEnabled ? "ON" : "OFF")
     }
 
     // MARK: - Hotkey Manager

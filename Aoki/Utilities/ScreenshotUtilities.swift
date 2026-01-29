@@ -6,6 +6,11 @@
 import ScreenCaptureKit
 import AppKit
 
+// MARK: - Settings
+
+/// Whether to automatically inject file paths into the terminal after capture
+var terminalInjectionEnabled = true
+
 // MARK: - Public API
 
 /// Captures a screenshot of the frontmost window and copies it to clipboard + sends to Yoink.
@@ -152,6 +157,12 @@ func saveImage(_ image: NSImage, mode: QualityMode = .reading) -> URL? {
         try data.write(to: fileURL)
         print("Screenshot saved to: \(fileURL.path) (\(mode == .reading ? "Reading" : "Design") mode)")
         sendToYoink(fileURL)
+        if terminalInjectionEnabled {
+            // Small delay to let Yoink process first, then switch to terminal
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                injectPathIntoTerminal(fileURL)
+            }
+        }
         return fileURL
     } catch {
         print("Failed to save image: \(error.localizedDescription)")
@@ -169,6 +180,47 @@ private func sendToYoink(_ fileURL: URL) {
         try process.run()
     } catch {
         print("Failed to send to Yoink: \(error.localizedDescription)")
+    }
+}
+
+/// Injects the file path into a running terminal app.
+/// Activates the terminal and types the path, ready for the user to hit Enter.
+func injectPathIntoTerminal(_ fileURL: URL) {
+    // Use osascript via Process for more reliable execution
+    let script = """
+    tell application "System Events"
+        set runningApps to name of every application process
+        set terminalApps to {"Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "Kitty", "Hyper"}
+
+        set targetTerminal to ""
+        repeat with appName in terminalApps
+            if runningApps contains (appName as text) then
+                set targetTerminal to (appName as text)
+                exit repeat
+            end if
+        end repeat
+
+        if targetTerminal is not "" then
+            tell process targetTerminal
+                set frontmost to true
+            end tell
+            delay 0.3
+            tell process targetTerminal
+                keystroke "\(fileURL.path)"
+            end tell
+        end if
+    end tell
+    """
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", script]
+
+    do {
+        try process.run()
+        print("Terminal injection script launched for: \(fileURL.path)")
+    } catch {
+        print("Failed to run terminal injection: \(error.localizedDescription)")
     }
 }
 
