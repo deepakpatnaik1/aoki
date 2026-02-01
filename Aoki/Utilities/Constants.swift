@@ -31,11 +31,15 @@ struct Constants {
         static let twoKeyCode: Int64 = 19
         /// "3" key code (for Ctrl+3)
         static let threeKeyCode: Int64 = 20
+        /// "4" key code (for Ctrl+4)
+        static let fourKeyCode: Int64 = 21
     }
 
     struct Quality {
         /// JPEG compression for Reading mode (0.0 - 1.0)
         static let readingModeCompression: CGFloat = 0.75
+        /// Max dimension for Reading mode (Claude API limit is 2000px for multi-image)
+        static let readingModeMaxDimension: Int = 1800
     }
 }
 

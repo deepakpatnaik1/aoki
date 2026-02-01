@@ -3,9 +3,10 @@
 //  Aoki
 //
 //  Manages global hotkeys:
-//  - Ctrl+1: Capture active window screenshot
-//  - Ctrl+2: Activate scrolling screenshot capture
+//  - Ctrl+1: Capture active window screenshot → Yoink
+//  - Ctrl+2: Capture active window screenshot → Warp input bar
 //  - Ctrl+3: Capture selected region screenshot
+//  - Ctrl+4: Activate scrolling screenshot capture
 //
 
 import Cocoa
@@ -68,7 +69,7 @@ class HotkeyManager {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
 
-        os_log("Hotkey listener STARTED successfully. Ctrl+1 for window, Ctrl+2 for scrolling, Ctrl+3 for region.", log: logger, type: .info)
+        os_log("Hotkey listener STARTED successfully. Ctrl+1 window→Yoink, Ctrl+2 window→Warp, Ctrl+3 region, Ctrl+4 scrolling.", log: logger, type: .info)
     }
 
     /// Stops listening for global hotkeys.
@@ -91,18 +92,27 @@ class HotkeyManager {
         // Check if Control key is held
         let controlHeld = flags.contains(.maskControl)
 
-        // Ctrl+1: Window screenshot
+        // Ctrl+1: Window screenshot → Yoink
         if controlHeld && keyCode == Constants.Hotkey.oneKeyCode {
-            os_log("Ctrl+1 detected! Capturing active window...", log: logger, type: .info)
+            os_log("Ctrl+1 detected! Capturing window → Yoink...", log: logger, type: .info)
             DispatchQueue.main.async { [weak self] in
-                self?.delegate?.windowScreenshotHotkeyPressed()
+                self?.delegate?.windowToYoinkHotkeyPressed()
             }
             return true
         }
 
-        // Ctrl+2: Scrolling screenshot
+        // Ctrl+2: Window screenshot → Warp
         if controlHeld && keyCode == Constants.Hotkey.twoKeyCode {
-            os_log("Ctrl+2 detected! Starting scrolling capture...", log: logger, type: .info)
+            os_log("Ctrl+2 detected! Capturing window → Warp...", log: logger, type: .info)
+            DispatchQueue.main.async { [weak self] in
+                self?.delegate?.windowToWarpHotkeyPressed()
+            }
+            return true
+        }
+
+        // Ctrl+4: Scrolling screenshot
+        if controlHeld && keyCode == Constants.Hotkey.fourKeyCode {
+            os_log("Ctrl+4 detected! Starting scrolling capture...", log: logger, type: .info)
             DispatchQueue.main.async { [weak self] in
                 self?.delegate?.scrollingScreenshotHotkeyPressed()
             }
@@ -134,10 +144,12 @@ class HotkeyManager {
 
 /// Protocol for hotkey events.
 protocol HotkeyManagerDelegate: AnyObject {
-    /// Called when Ctrl+1 is pressed (capture active window)
-    func windowScreenshotHotkeyPressed()
-    /// Called when Ctrl+2 is pressed (scrolling screenshot)
-    func scrollingScreenshotHotkeyPressed()
+    /// Called when Ctrl+1 is pressed (window screenshot → Yoink)
+    func windowToYoinkHotkeyPressed()
+    /// Called when Ctrl+2 is pressed (window screenshot → Warp)
+    func windowToWarpHotkeyPressed()
     /// Called when Ctrl+3 is pressed (region screenshot)
     func regionScreenshotHotkeyPressed()
+    /// Called when Ctrl+4 is pressed (scrolling screenshot)
+    func scrollingScreenshotHotkeyPressed()
 }

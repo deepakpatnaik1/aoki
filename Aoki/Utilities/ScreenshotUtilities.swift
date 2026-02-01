@@ -8,15 +8,19 @@ import AppKit
 
 // MARK: - Settings
 
-/// Whether to automatically inject file paths into the terminal after capture
-var terminalInjectionEnabled = true
+/// Destination for window screenshots
+enum WindowCaptureDestination {
+    case yoink       // Ctrl+1: Save + Yoink only
+    case warp        // Ctrl+2: Save + Warp input bar only
+}
 
 // MARK: - Public API
 
-/// Captures a screenshot of the frontmost window and copies it to clipboard + sends to Yoink.
+/// Captures a screenshot of the frontmost window.
+/// - Parameter destination: Where to send the screenshot (.yoink or .warp)
 /// Returns true if successful.
 @discardableResult
-func captureActiveWindow() async -> Bool {
+func captureActiveWindow(destination: WindowCaptureDestination = .yoink) async -> Bool {
     // Use CGWindowListCreateImage for reliable single-window capture
     let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
 
@@ -64,10 +68,10 @@ func captureActiveWindow() async -> Bool {
     pasteboard.clearContents()
     pasteboard.writeObjects([nsImage])
 
-    // Save to file and send to Yoink
-    saveImage(nsImage, mode: .reading)
+    // Save to file and send to destination
+    saveImage(nsImage, mode: .reading, windowDestination: destination)
 
-    print("Window screenshot captured: \(windowName) (\(Int(width))x\(Int(height)))")
+    print("Window screenshot captured: \(windowName) (\(Int(width))x\(Int(height))) → \(destination == .yoink ? "Yoink" : "Warp")")
     return true
 }
 
@@ -110,10 +114,19 @@ func captureSingleScreenshot(_ rectangle: NSRect) async -> NSImage? {
 /// - Parameters:
 ///   - image: The `NSImage` to save.
 ///   - mode: Quality mode - `.reading` for JPEG (small files), `.design` for PNG (lossless)
+///   - windowDestination: For window captures, specifies where to send (nil = Yoink + optional terminal)
 /// - Returns: A `URL` to the saved file, or `nil` if saving fails.
 @discardableResult
-func saveImage(_ image: NSImage, mode: QualityMode = .reading) -> URL? {
-    guard let tiffData = image.tiffRepresentation,
+func saveImage(_ image: NSImage, mode: QualityMode = .reading, windowDestination: WindowCaptureDestination? = nil) -> URL? {
+    // For reading mode, resize if exceeds max dimension (Claude API limit)
+    let processedImage: NSImage
+    if mode == .reading {
+        processedImage = resizeIfNeeded(image, maxDimension: Constants.Quality.readingModeMaxDimension)
+    } else {
+        processedImage = image
+    }
+
+    guard let tiffData = processedImage.tiffRepresentation,
           let bitmapRep = NSBitmapImageRep(data: tiffData) else {
         print("Failed to create bitmap representation.")
         return nil
@@ -156,13 +169,21 @@ func saveImage(_ image: NSImage, mode: QualityMode = .reading) -> URL? {
     do {
         try data.write(to: fileURL)
         print("Screenshot saved to: \(fileURL.path) (\(mode == .reading ? "Reading" : "Design") mode)")
-        sendToYoink(fileURL)
-        if terminalInjectionEnabled {
-            // Small delay to let Yoink process first, then switch to terminal
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                injectPathIntoTerminal(fileURL)
+
+        // Handle destination
+        if let destination = windowDestination {
+            // Window capture with explicit destination
+            switch destination {
+            case .yoink:
+                sendToYoink(fileURL)
+            case .warp:
+                injectPathIntoWarp(fileURL)
             }
+        } else {
+            // Default behavior for region/scrolling captures
+            sendToYoink(fileURL)
         }
+
         return fileURL
     } catch {
         print("Failed to save image: \(error.localizedDescription)")
@@ -180,6 +201,34 @@ private func sendToYoink(_ fileURL: URL) {
         try process.run()
     } catch {
         print("Failed to send to Yoink: \(error.localizedDescription)")
+    }
+}
+
+/// Injects the file path into Warp's active tab input bar.
+private func injectPathIntoWarp(_ fileURL: URL) {
+    let script = """
+    tell application "System Events"
+        if exists process "Warp" then
+            tell process "Warp"
+                set frontmost to true
+            end tell
+            delay 0.2
+            tell process "Warp"
+                keystroke " \(fileURL.path)"
+            end tell
+        end if
+    end tell
+    """
+
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    process.arguments = ["-e", script]
+
+    do {
+        try process.run()
+        print("Warp injection: \(fileURL.path)")
+    } catch {
+        print("Failed to inject into Warp: \(error.localizedDescription)")
     }
 }
 
@@ -294,6 +343,47 @@ private func getFileName(extension ext: String) -> String {
     }
 
     return "Image \(maxNumber + 1).\(ext)"
+}
+
+// MARK: - Image Processing
+
+/// Resizes an image if either dimension exceeds the max, preserving aspect ratio.
+private func resizeIfNeeded(_ image: NSImage, maxDimension: Int) -> NSImage {
+    let maxDim = CGFloat(maxDimension)
+
+    // Get pixel dimensions from the bitmap representation
+    guard let tiffData = image.tiffRepresentation,
+          let bitmapRep = NSBitmapImageRep(data: tiffData) else {
+        return image
+    }
+
+    let pixelWidth = CGFloat(bitmapRep.pixelsWide)
+    let pixelHeight = CGFloat(bitmapRep.pixelsHigh)
+
+    // Check if resize is needed
+    guard pixelWidth > maxDim || pixelHeight > maxDim else {
+        return image
+    }
+
+    // Calculate new size preserving aspect ratio
+    let scale = min(maxDim / pixelWidth, maxDim / pixelHeight)
+    let newWidth = pixelWidth * scale
+    let newHeight = pixelHeight * scale
+
+    // Create resized image
+    let newSize = NSSize(width: newWidth, height: newHeight)
+    let resizedImage = NSImage(size: newSize)
+
+    resizedImage.lockFocus()
+    NSGraphicsContext.current?.imageInterpolation = .high
+    image.draw(in: NSRect(origin: .zero, size: newSize),
+               from: NSRect(origin: .zero, size: image.size),
+               operation: .copy,
+               fraction: 1.0)
+    resizedImage.unlockFocus()
+
+    print("Resized image from \(Int(pixelWidth))x\(Int(pixelHeight)) to \(Int(newWidth))x\(Int(newHeight))")
+    return resizedImage
 }
 
 // MARK: - Permission Check

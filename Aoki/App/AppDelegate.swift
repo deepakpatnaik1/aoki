@@ -3,9 +3,10 @@
 //  Aoki
 //
 //  Menu bar app that listens for global hotkeys:
-//  - Ctrl+1: Capture active window screenshot
-//  - Ctrl+2: Activate scrolling screenshot capture
+//  - Ctrl+1: Capture active window screenshot → Yoink
+//  - Ctrl+2: Capture active window screenshot → Warp
 //  - Ctrl+3: Capture selected region screenshot
+//  - Ctrl+4: Activate scrolling screenshot capture
 //
 
 import SwiftUI
@@ -57,17 +58,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
 
         let menu = NSMenu()
 
-        let windowCaptureItem = NSMenuItem(title: "Window Screenshot (⌃1)", action: #selector(captureWindow), keyEquivalent: "")
-        windowCaptureItem.target = self
-        menu.addItem(windowCaptureItem)
+        let windowToYoinkItem = NSMenuItem(title: "Window → Yoink (⌃1)", action: #selector(captureWindowToYoink), keyEquivalent: "")
+        windowToYoinkItem.target = self
+        menu.addItem(windowToYoinkItem)
 
-        let scrollingCaptureItem = NSMenuItem(title: "Scrolling Capture (⌃2)", action: #selector(activateCapture), keyEquivalent: "")
-        scrollingCaptureItem.target = self
-        menu.addItem(scrollingCaptureItem)
+        let windowToWarpItem = NSMenuItem(title: "Window → Warp (⌃2)", action: #selector(captureWindowToWarp), keyEquivalent: "")
+        windowToWarpItem.target = self
+        menu.addItem(windowToWarpItem)
 
         let regionCaptureItem = NSMenuItem(title: "Region Screenshot (⌃3)", action: #selector(captureRegion), keyEquivalent: "")
         regionCaptureItem.target = self
         menu.addItem(regionCaptureItem)
+
+        let scrollingCaptureItem = NSMenuItem(title: "Scrolling Capture (⌃4)", action: #selector(activateCapture), keyEquivalent: "")
+        scrollingCaptureItem.target = self
+        menu.addItem(scrollingCaptureItem)
 
         let restartItem = NSMenuItem(title: "Restart", action: #selector(restartCapture), keyEquivalent: "r")
         restartItem.target = self
@@ -93,12 +98,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         menu.addItem(openFolderItem)
 
         menu.addItem(NSMenuItem.separator())
-
-        // Terminal injection toggle
-        let terminalInjectionItem = NSMenuItem(title: "Auto-paste to Terminal", action: #selector(toggleTerminalInjection(_:)), keyEquivalent: "")
-        terminalInjectionItem.target = self
-        terminalInjectionItem.state = terminalInjectionEnabled ? .on : .off
-        menu.addItem(terminalInjectionItem)
 
         // Launch at Login toggle
         let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
@@ -128,14 +127,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         }
     }
 
-    // MARK: - Terminal Injection
-
-    @objc private func toggleTerminalInjection(_ sender: NSMenuItem) {
-        terminalInjectionEnabled.toggle()
-        sender.state = terminalInjectionEnabled ? .on : .off
-        os_log("Terminal injection: %{public}@", log: logger, type: .info, terminalInjectionEnabled ? "ON" : "OFF")
-    }
-
     // MARK: - Hotkey Manager
 
     private func setupHotkeyManager() {
@@ -143,16 +134,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         hotkeyManager?.startListening()
     }
 
-    /// Called when Ctrl+1 is pressed - capture active window
-    func windowScreenshotHotkeyPressed() {
-        os_log("windowScreenshotHotkeyPressed() called", log: logger, type: .info)
-        captureWindow()
+    /// Called when Ctrl+1 is pressed - window screenshot → Yoink
+    func windowToYoinkHotkeyPressed() {
+        os_log("windowToYoinkHotkeyPressed() called", log: logger, type: .info)
+        captureWindowToYoink()
     }
 
-    /// Called when Ctrl+2 is pressed - scrolling screenshot
-    func scrollingScreenshotHotkeyPressed() {
-        os_log("scrollingScreenshotHotkeyPressed() called", log: logger, type: .info)
-        activateCapture()
+    /// Called when Ctrl+2 is pressed - window screenshot → Warp
+    func windowToWarpHotkeyPressed() {
+        os_log("windowToWarpHotkeyPressed() called", log: logger, type: .info)
+        captureWindowToWarp()
     }
 
     /// Called when Ctrl+3 is pressed - region screenshot
@@ -161,10 +152,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, HotkeyManagerDelegate {
         captureRegion()
     }
 
-    @objc private func captureWindow() {
-        os_log("captureWindow() called - capturing active window", log: logger, type: .info)
+    /// Called when Ctrl+4 is pressed - scrolling screenshot
+    func scrollingScreenshotHotkeyPressed() {
+        os_log("scrollingScreenshotHotkeyPressed() called", log: logger, type: .info)
+        activateCapture()
+    }
+
+    @objc private func captureWindowToYoink() {
+        os_log("captureWindowToYoink() called", log: logger, type: .info)
         Task {
-            await captureActiveWindow()
+            await captureActiveWindow(destination: .yoink)
+        }
+    }
+
+    @objc private func captureWindowToWarp() {
+        os_log("captureWindowToWarp() called", log: logger, type: .info)
+        Task {
+            await captureActiveWindow(destination: .warp)
         }
     }
 
