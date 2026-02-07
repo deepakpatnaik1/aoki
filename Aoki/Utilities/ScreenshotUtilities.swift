@@ -177,7 +177,7 @@ func saveImage(_ image: NSImage, mode: QualityMode = .reading, windowDestination
             case .yoink:
                 sendToYoink(fileURL)
             case .warp:
-                injectPathIntoWarp(fileURL)
+                injectPathIntoTerminal(fileURL)
             }
         } else {
             // Default behavior for region/scrolling captures
@@ -233,13 +233,13 @@ private func injectPathIntoWarp(_ fileURL: URL) {
 }
 
 /// Injects the file path into a running terminal app.
-/// Activates the terminal and types the path, ready for the user to hit Enter.
+/// Activates the terminal and pastes the path via clipboard, ready for the user to hit Enter.
 func injectPathIntoTerminal(_ fileURL: URL) {
-    // Use osascript via Process for more reliable execution
+    // Use clipboard paste instead of keystroke — keystroke drops characters in iTerm2
     let script = """
     tell application "System Events"
         set runningApps to name of every application process
-        set terminalApps to {"Terminal", "iTerm2", "iTerm", "Warp", "Alacritty", "Kitty", "Hyper"}
+        set terminalApps to {"iTerm2", "iTerm", "Warp", "Terminal", "Alacritty", "Kitty", "Hyper"}
 
         set targetTerminal to ""
         repeat with appName in terminalApps
@@ -250,12 +250,13 @@ func injectPathIntoTerminal(_ fileURL: URL) {
         end repeat
 
         if targetTerminal is not "" then
+            set the clipboard to " \(fileURL.path)"
             tell process targetTerminal
                 set frontmost to true
             end tell
             delay 0.3
             tell process targetTerminal
-                keystroke " \(fileURL.path)"
+                keystroke "v" using command down
             end tell
         end if
     end tell
