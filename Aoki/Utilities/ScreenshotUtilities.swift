@@ -170,6 +170,15 @@ func saveImage(_ image: NSImage, mode: QualityMode = .reading, windowDestination
         try data.write(to: fileURL)
         print("Screenshot saved to: \(fileURL.path) (\(mode == .reading ? "Reading" : "Design") mode)")
 
+        // Trash previous screenshots (Image *.jpg / Image *.png) — keep only the one just saved
+        if let files = try? FileManager.default.contentsOfDirectory(atPath: saveDirectory.path) {
+            for file in files where file.hasPrefix("Image ") && (file.hasSuffix(".jpg") || file.hasSuffix(".png")) {
+                guard file != filename else { continue }
+                let oldURL = saveDirectory.appendingPathComponent(file)
+                try? FileManager.default.trashItem(at: oldURL, resultingItemURL: nil)
+            }
+        }
+
         // Handle destination
         if let destination = windowDestination {
             // Window capture with explicit destination
